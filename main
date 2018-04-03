@@ -62,11 +62,16 @@ mkdir output
 #    --participant_label $sub
 
 singularity run -e \
-    -B $(pwd)/output:/tmp/$bids_sub \
     docker://katealpert/bids-mrtrix3_connectome \
-    input /tmp participant \
+    input . participant \
     -n 8 --parcellation $parc $sl_arg $pp_arg \
     --participant_label $sub
+res=$?
+
+if [[ -d ${bids_sub} ]]; then
+    mv ${bids_sub} output
+    rm -rf input
+fi
 
 #exit code from the last command (singularity) will be used.
-exit $?
+exit $res
