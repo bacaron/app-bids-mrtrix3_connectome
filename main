@@ -62,9 +62,9 @@ mkdir output
 #    --participant_label $sub
 
 singularity run -e \
-    -B $(pwd)/output:/output/$bids_sub \
+    -B $(pwd)/output:/tmp/$bids_sub \
     docker://katealpert/bids-mrtrix3_connectome \
-    input /output participant \
+    input /tmp participant \
     -n 8 --parcellation $parc $sl_arg $pp_arg \
     --participant_label $sub
 
