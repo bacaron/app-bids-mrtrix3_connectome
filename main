@@ -51,16 +51,6 @@ cp $bvec input/${bids_sub}/dwi/${bids_sub}${suffix}_dwi.bvec
 cp $bval input/${bids_sub}/dwi/${bids_sub}${suffix}_dwi.bval
 jq '._inputs[] | select(.id == "dwi") | .meta' config.json > input/${bids_sub}/dwi/${bids_sub}${suffix}_dwi.json
 
-#loc for output
-mkdir output
-
-#singularity run -e \
-#    -B $(pwd)/output:/output/$bids_sub \
-#    docker://bids/mrtrix3_connectome:0.2.2 \
-#    input /output participant \
-#    -n 8 --parcellation $parc --streamlines $sl \
-#    --participant_label $sub
-
 singularity run -e \
     docker://katealpert/bids-mrtrix3_connectome \
     input . participant \
