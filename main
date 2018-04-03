@@ -1,0 +1,72 @@
+#!/bin/bash
+#PBS -l nodes=1:ppn=8,walltime=24:00:00
+#PBS -N app-bids-mrtrix3_connectome
+
+T1=`jq -r '.t1' config.json`
+dwi=`jq -r '.dwi' config.json`
+bvec=`jq -r '.bvecs' config.json`
+bval=`jq -r '.bvals' config.json`
+dwi2=`jq -r '.dwi2' config.json`
+bvec2=`jq -r '.bvecs2' config.json`
+bval2=`jq -r '.bvals2' config.json`
+parc=`jq -r '.parcellation' config.json`
+preproc=`jq -r '.preprocessed' config.json`
+if [[ $preproc == true ]]; then
+    pp_arg="--preprocessed"
+fi
+sl=`jq -r '.streamlines' config.json`
+if [[ -n $sl && $sl != null ]]; then
+    sl_arg="--streamlines $sl"
+fi
+
+#clean up previous job (just in case)
+rm -rf ${bids_sub} output input
+
+#BIDS
+sub=$(jq -r "._inputs[0].meta.subject" config.json | tr -d "_")
+if [[ -z $sub || $sub == null ]]; then
+    sub=0
+fi
+bids_sub=sub-$sub
+
+#organizing brainlife input to bids structure
+mkdir -p input/${bids_sub}/anat
+mkdir -p input/${bids_sub}/dwi
+
+#let's cp because ln is problematic when relative path is used
+#make BIDS json sidecar
+cp $T1 input/${bids_sub}/anat/${bids_sub}_T1w.nii.gz
+jq '._inputs[] | select(.id == "t1") | .meta' config.json > input/${bids_sub}/anat/${bids_sub}_T1w.json
+
+if [[ -n $dwi2 && $dwi2 != null ]]; then
+    cp $dwi2 input/${bids_sub}/dwi/${bids_sub}_run-02_dwi.nii.gz
+    cp $bvec2 input/${bids_sub}/dwi/${bids_sub}_run-02_dwi.bvec
+    cp $bval2 input/${bids_sub}/dwi/${bids_sub}_run-02_dwi.bval
+    jq '._inputs[] | select(.id == "dwi2") | .meta' config.json > input/${bids_sub}/dwi/${bids_sub}_run-02_dwi.json
+    suffix=_run-01
+fi
+
+cp $dwi input/${bids_sub}/dwi/${bids_sub}${suffix}_dwi.nii.gz
+cp $bvec input/${bids_sub}/dwi/${bids_sub}${suffix}_dwi.bvec
+cp $bval input/${bids_sub}/dwi/${bids_sub}${suffix}_dwi.bval
+jq '._inputs[] | select(.id == "dwi") | .meta' config.json > input/${bids_sub}/dwi/${bids_sub}${suffix}_dwi.json
+
+#loc for output
+mkdir output
+
+#singularity run -e \
+#    -B $(pwd)/output:/output/$bids_sub \
+#    docker://bids/mrtrix3_connectome:0.2.2 \
+#    input /output participant \
+#    -n 8 --parcellation $parc --streamlines $sl \
+#    --participant_label $sub
+
+singularity run -e \
+    -B $(pwd)/output:/output/$bids_sub \
+    docker://katealpert/bids-mrtrix3_connectome \
+    input /output participant \
+    -n 8 --parcellation $parc $sl_arg $pp_arg \
+    --participant_label $sub
+
+#exit code from the last command (singularity) will be used.
+exit $?

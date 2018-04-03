@@ -1,0 +1,9 @@
+{
+    "t1": "/mnt/scratch/testdata/IXI002/anat_5a389b2db66eef1a5e122af5/IXI002_t1.nii.gz",
+    "dwi": "/mnt/scratch/testdata/IXI002/anat_5a3933c0277fa01a8426671b/IXI002_dwi.nii.gz",
+    "bvals": "/mnt/scratch/testdata/IXI002/anat_5a3933c0277fa01a8426671b/IXI002_dwi.bvals",
+    "bvecs": "/mnt/scratch/testdata/IXI002/anat_5a3933c0277fa01a8426671b/IXI002_dwi.bvecs",
+    "parcellation": "aal",
+    "preprocessed": "true",
+    "streamlines": 10
+}
