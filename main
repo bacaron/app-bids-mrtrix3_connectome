@@ -47,7 +47,7 @@ function copy_to_bids {
     #let's cp because ln is problematic when relative path is used
     cp ${!vname} ${bids_dir}/${bids_sub}_${bids_name}.nii.gz
     #make BIDS json sidecar from BL metadata
-    jq --arg idprm=$vname '._inputs[] | select(.id == "$vname") | .meta' \
+    jq --arg idprm $vname '._inputs[] | select(.id == $idprm) | .meta' \
         config.json > ${bids_dir}/${bids_sub}_${bids_name}.json
     if [[ $sdir == dwi ]]; then
         if [[ $preprocessed == true ]] && \
