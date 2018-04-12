@@ -2,59 +2,92 @@
 #PBS -l nodes=1:ppn=8,walltime=24:00:00
 #PBS -N app-bids-mrtrix3_connectome
 
-T1=`jq -r '.t1' config.json`
-dwi=`jq -r '.dwi' config.json`
-bvec=`jq -r '.bvecs' config.json`
-bval=`jq -r '.bvals' config.json`
-dwi2=`jq -r '.dwi2' config.json`
-bvec2=`jq -r '.bvecs2' config.json`
-bval2=`jq -r '.bvals2' config.json`
-parc=`jq -r '.parcellation' config.json`
-preproc=`jq -r '.preprocessed' config.json`
-if [[ $preproc == true ]]; then
+for prm in $(jq -r 'keys[]' config.json); do
+    val=$(jq -r ".$prm" config.json)
+    eval "$prm=$val"
+done
+
+if [[ $preprocessed == true ]]; then
     pp_arg="--preprocessed"
 fi
-sl=`jq -r '.streamlines' config.json`
-if [[ -n $sl && $sl != null ]]; then
-    sl_arg="--streamlines $sl"
+if [[ -n $streamlines && $streamlines != null ]]; then
+    sl_arg="--streamlines $streamlines"
 fi
 
 #clean up previous job (just in case)
 rm -rf ${bids_sub} output input
 
 #BIDS
+function check_required_fields {
+    #these fields are required for preprocessed=true
+    local json=$1
+    local f1=$(jq '.TotalReadoutTime' $json)
+    local f2=$(jq '.PhaseEncodingDirection' $json)
+    [[ -n $f1 && -n $f2 && $f1 != null && $f2 != null ]]
+}
+
+function copy_to_bids {
+    # inputs:   (1) bids subdirectory, (2) bids image suffix,
+    #           (3) BL variables name, (4) optinal run # suffix
+
+    local sdir=$1
+    local itype=$2
+    local vname=$3
+    local suffix=$4
+    local msg
+
+    if [[ -n $suffix ]]; then
+        suffix=${suffix}_
+    fi
+
+    local bids_dir=input/${bids_sub}/$sdir
+    local bids_name=$suffix$itype
+
+    mkdir -p $bids_dir
+    pushd $bids_dir
+    #let's cp because ln is problematic when relative path is used
+    cp ${!vname} ${bids_sub}_${bids_name}.nii.gz
+    #make BIDS json sidecar from BL metadata
+    jq --arg idprm=$vname '._inputs[] | select(.id == "$vname") | .meta' \
+        config.json > ${bids_sub}_${bids_name}.json
+    if [[ $sdir == dwi ]]; then
+        if [[ $preprocessed == true ]] && \
+            ! check_required_fields ${bids_sub}_${bids_name}.json; then
+            msg="TotalReadoutTime and PhaseEncodingDirection BIDS fields required "
+            msg+="to run mrtrix3_connectome preprocessing. Missing for ${!vname}"
+            echo $msg
+            exit 1
+        fi
+        local vbval=${vname/dwi/bvals} #BL names with "s"
+        local vbvec=${vname/dwi/bvecs}
+        cp ${!vbval} ${bids_sub}_${bids_name}.bval
+        cp ${!vbvec} ${bids_sub}_${bids_name}.bvec
+    fi
+    popd
+}
+
 sub=$(jq -r "._inputs[0].meta.subject" config.json | tr -d "_")
 if [[ -z $sub || $sub == null ]]; then
     sub=0
 fi
 bids_sub=sub-$sub
 
-#organizing brainlife input to bids structure
-mkdir -p input/${bids_sub}/anat
-mkdir -p input/${bids_sub}/dwi
-
-#let's cp because ln is problematic when relative path is used
-#make BIDS json sidecar
-cp $T1 input/${bids_sub}/anat/${bids_sub}_T1w.nii.gz
-jq '._inputs[] | select(.id == "t1") | .meta' config.json > input/${bids_sub}/anat/${bids_sub}_T1w.json
+copy_to_bids anat T1w t1
 
 if [[ -n $dwi2 && $dwi2 != null ]]; then
-    cp $dwi2 input/${bids_sub}/dwi/${bids_sub}_run-02_dwi.nii.gz
-    cp $bvec2 input/${bids_sub}/dwi/${bids_sub}_run-02_dwi.bvec
-    cp $bval2 input/${bids_sub}/dwi/${bids_sub}_run-02_dwi.bval
-    jq '._inputs[] | select(.id == "dwi2") | .meta' config.json > input/${bids_sub}/dwi/${bids_sub}_run-02_dwi.json
-    suffix=_run-01
+    copy_to_bids dwi dwi dwi2 run-02
+    run_suffix=run-01
+elif [[ $preprocessed == true ]]; then
+    echo "Two DWI images are required to run mrtrix3_connectome preprocessing."
+    exit 1
 fi
 
-cp $dwi input/${bids_sub}/dwi/${bids_sub}${suffix}_dwi.nii.gz
-cp $bvec input/${bids_sub}/dwi/${bids_sub}${suffix}_dwi.bvec
-cp $bval input/${bids_sub}/dwi/${bids_sub}${suffix}_dwi.bval
-jq '._inputs[] | select(.id == "dwi") | .meta' config.json > input/${bids_sub}/dwi/${bids_sub}${suffix}_dwi.json
+copy_to_bids dwi dwi dwi $run_suffix
 
 singularity run -e \
     docker://katealpert/bids-mrtrix3_connectome \
     input . participant \
-    -n 8 --parcellation $parc $sl_arg $pp_arg \
+    -n 8 --parcellation $parcellation $sl_arg $pp_arg \
     --participant_label $sub
 res=$?
 
