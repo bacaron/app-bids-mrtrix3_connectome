@@ -51,7 +51,7 @@ function copy_to_bids {
         config.json > ${bids_dir}/${bids_sub}_${bids_name}.json
     if [[ $sdir == dwi ]]; then
         if [[ $preprocessed == false ]] && \
-            ! check_required_fields ${bids_sub}_${bids_name}.json; then
+            ! check_required_fields ${bids_dir}/${bids_sub}_${bids_name}.json; then
             msg="TotalReadoutTime and PhaseEncodingDirection BIDS fields required "
             msg+="to run mrtrix3_connectome preprocessing. Missing for ${!vname}"
             echo $msg
