@@ -50,7 +50,7 @@ function copy_to_bids {
     jq --arg idprm $vname '._inputs[] | select(.id == $idprm) | .meta' \
         config.json > ${bids_dir}/${bids_sub}_${bids_name}.json
     if [[ $sdir == dwi ]]; then
-        if [[ $preprocessed == true ]] && \
+        if [[ $preprocessed == false ]] && \
             ! check_required_fields ${bids_sub}_${bids_name}.json; then
             msg="TotalReadoutTime and PhaseEncodingDirection BIDS fields required "
             msg+="to run mrtrix3_connectome preprocessing. Missing for ${!vname}"
@@ -75,7 +75,7 @@ copy_to_bids anat T1w t1
 if [[ -n $dwi2 && $dwi2 != null ]]; then
     copy_to_bids dwi dwi dwi2 run-02
     run_suffix=run-01
-elif [[ $preprocessed == true ]]; then
+elif [[ $preprocessed == false ]]; then
     echo "Two DWI images are required to run mrtrix3_connectome preprocessing."
     exit 1
 fi
