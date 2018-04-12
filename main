@@ -44,12 +44,11 @@ function copy_to_bids {
     local bids_name=$suffix$itype
 
     mkdir -p $bids_dir
-    pushd $bids_dir
     #let's cp because ln is problematic when relative path is used
-    cp ${!vname} ${bids_sub}_${bids_name}.nii.gz
+    cp ${!vname} ${bids_dir}/${bids_sub}_${bids_name}.nii.gz
     #make BIDS json sidecar from BL metadata
     jq --arg idprm=$vname '._inputs[] | select(.id == "$vname") | .meta' \
-        config.json > ${bids_sub}_${bids_name}.json
+        config.json > ${bids_dir}/${bids_sub}_${bids_name}.json
     if [[ $sdir == dwi ]]; then
         if [[ $preprocessed == true ]] && \
             ! check_required_fields ${bids_sub}_${bids_name}.json; then
@@ -60,10 +59,9 @@ function copy_to_bids {
         fi
         local vbval=${vname/dwi/bvals} #BL names with "s"
         local vbvec=${vname/dwi/bvecs}
-        cp ${!vbval} ${bids_sub}_${bids_name}.bval
-        cp ${!vbvec} ${bids_sub}_${bids_name}.bvec
+        cp ${!vbval} ${bids_dir}/${bids_sub}_${bids_name}.bval
+        cp ${!vbvec} ${bids_dir}/${bids_sub}_${bids_name}.bvec
     fi
-    popd
 }
 
 sub=$(jq -r "._inputs[0].meta.subject" config.json | tr -d "_")
