@@ -2,9 +2,16 @@
 #PBS -l nodes=1:ppn=8,walltime=24:00:00
 #PBS -N app-bids-mrtrix3_connectome
 
+function json_arr_to_bash_list {
+    local v=$@
+    if [[ $v =~ \[.*\] ]]; then
+        v=$(echo $v | tr -d '\[\],')  
+    fi
+    echo $v
+}
 for prm in $(jq -r 'keys[]' config.json | grep -Ev ^_); do
-    val=$(jq -r ".$prm" config.json)
-    eval "$prm=\"$val\""
+    val=$(json_arr_to_bash_list $(jq -r ".$prm" config.json))
+    eval "$prm=( $val )"
 done
 
 if [[ $preprocessed == true ]]; then
@@ -33,9 +40,13 @@ function copy_to_bids {
     local sdir=$1
     local itype=$2
     local vname=$3
-    local suffix=$4
+    local vind=$4
+    local suffix=$5
     local msg
 
+    if [[ -z $vind ]]; then
+        vind=0
+    fi
     if [[ -n $suffix ]]; then
         suffix=${suffix}_
     fi
@@ -45,9 +56,9 @@ function copy_to_bids {
 
     mkdir -p $bids_dir
     #let's cp because ln is problematic when relative path is used
-    cp ${!vname} ${bids_dir}/${bids_sub}_${bids_name}.nii.gz
+    cp ${!vname[$vind]} ${bids_dir}/${bids_sub}_${bids_name}.nii.gz
     #make BIDS json sidecar from BL metadata
-    jq --arg idprm $vname '._inputs[] | select(.id == $idprm) | .meta' \
+    jq --arg idprm $vname --arg idx $vind '._inputs[] | select(.id == $idprm) | .[$idx].meta' \
         config.json > ${bids_dir}/${bids_sub}_${bids_name}.json
     if [[ $sdir == dwi ]]; then
         if [[ $preprocessed == false ]] && \
@@ -59,8 +70,8 @@ function copy_to_bids {
         fi
         local vbval=${vname/dwi/bvals} #BL names with "s"
         local vbvec=${vname/dwi/bvecs}
-        cp ${!vbval} ${bids_dir}/${bids_sub}_${bids_name}.bval
-        cp ${!vbvec} ${bids_dir}/${bids_sub}_${bids_name}.bvec
+        cp ${!vbval[$vind]} ${bids_dir}/${bids_sub}_${bids_name}.bval
+        cp ${!vbvec[$vind]} ${bids_dir}/${bids_sub}_${bids_name}.bvec
     fi
 }
 
@@ -72,15 +83,17 @@ bids_sub=sub-$sub
 
 copy_to_bids anat T1w t1
 
-if [[ -n $dwi2 && $dwi2 != null ]]; then
-    copy_to_bids dwi dwi dwi2 run-02
-    run_suffix=run-01
+if [[ ${#dwi[@]} -gt 1 ]]; then
+    for ((i=0; i<${#dwi[@]}; i++)); do
+        run_suffix=run-$(printf '%02d' $((i+1))) 
+        copy_to_bids dwi dwi dwi $i $run_suffix
+    done
 elif [[ $preprocessed == false ]]; then
     echo "Two DWI images are required to run mrtrix3_connectome preprocessing."
     exit 1
+else
+    copy_to_bids dwi dwi dwi 0
 fi
-
-copy_to_bids dwi dwi dwi $run_suffix
 
 singularity run -e \
     docker://katealpert/bids-mrtrix3_connectome \
