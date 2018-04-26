@@ -21,9 +21,6 @@ if [[ -n $streamlines && $streamlines != null ]]; then
     sl_arg="--streamlines $streamlines"
 fi
 
-#clean up previous job (just in case)
-rm -rf ${bids_sub} output input
-
 #BIDS
 function check_required_fields {
     #these fields are required for preprocessed=true
@@ -42,7 +39,7 @@ function copy_to_bids {
     local vname=$3
     local vind=$4
     local suffix=$5
-    local msg
+    local msg meta metaval
 
     if [[ -z $vind ]]; then
         vind=0
@@ -53,26 +50,29 @@ function copy_to_bids {
 
     local bids_dir=input/${bids_sub}/$sdir
     local bids_name=$suffix$itype
+    local vvalue=$(eval echo \${$vname[$vind]})
 
     mkdir -p $bids_dir
     #let's cp because ln is problematic when relative path is used
-    cp ${!vname[$vind]} ${bids_dir}/${bids_sub}_${bids_name}.nii.gz
+    cp $vvalue ${bids_dir}/${bids_sub}_${bids_name}.nii.gz
     #make BIDS json sidecar from BL metadata
     jq --arg idprm $vname --argjson idx $vind \
         '[ ._inputs[] | select(.id == $idprm) | .meta ] | .[$idx]' \
         config.json > ${bids_dir}/${bids_sub}_${bids_name}.json
     if [[ $sdir == dwi ]]; then
         if [[ $preprocessed == false ]] && \
-            ! check_required_fields ${bids_dir}/${bids_sub}_${bids_name}.json; then
-            msg="TotalReadoutTime and PhaseEncodingDirection BIDS fields required "
-            msg+="to run mrtrix3_connectome preprocessing. Missing for ${!vname}"
+            ! check_required_fields ${bids_dir}/${bids_sub}_${bids_name}.json
+        then
+            msg="TotalReadoutTime and PhaseEncodingDirection BIDS fields reqd "
+            msg+="to run mrtrix3_connectome preproc. Missing for ${!vname}"
             echo $msg
             exit 1
         fi
-        local vbval=${vname/dwi/bvals} #BL names with "s"
-        local vbvec=${vname/dwi/bvecs}
-        cp ${!vbval[$vind]} ${bids_dir}/${bids_sub}_${bids_name}.bval
-        cp ${!vbvec[$vind]} ${bids_dir}/${bids_sub}_${bids_name}.bvec
+        for meta in bvec bval; do
+            #BL names with "s"
+            metaval=$(eval echo \${${vname/dwi/${meta}s}[$vind]}) 
+            cp $metaval ${bids_dir}/${bids_sub}_${bids_name}.$meta
+        done
     fi
 }
 
@@ -81,6 +81,9 @@ if [[ -z $sub || $sub == null ]]; then
     sub=0
 fi
 bids_sub=sub-$sub
+
+#clean up previous job (just in case)
+rm -rf ${bids_sub} output input
 
 copy_to_bids anat T1w t1
 
