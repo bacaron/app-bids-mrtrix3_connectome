@@ -106,7 +106,7 @@ singularity run -e \
     --participant_label $sub
 res=$?
 
-if [[ -d ${bids_sub} ]]; then
+if [[ -d ${bids_sub} && $res == 0 ]]; then
     mv ${bids_sub} output
     rm -rf input
 fi
