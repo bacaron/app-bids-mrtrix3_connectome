@@ -53,8 +53,7 @@ function copy_to_bids {
     local vvalue=$(eval echo \${$vname[$vind]})
 
     mkdir -p $bids_dir
-    #let's cp because ln is problematic when relative path is used
-    cp $vvalue ${bids_dir}/${bids_sub}_${bids_name}.nii.gz
+    ln -s $vvalue ${bids_dir}/${bids_sub}_${bids_name}.nii.gz
     #make BIDS json sidecar from BL metadata
     jq --arg idprm $vname --argjson idx $vind \
         '[ ._inputs[] | select(.id == $idprm) | .meta ] | .[$idx]' \
@@ -71,7 +70,7 @@ function copy_to_bids {
         for meta in bvec bval; do
             #BL names with "s"
             metaval=$(eval echo \${${vname/dwi/${meta}s}[$vind]}) 
-            cp $metaval ${bids_dir}/${bids_sub}_${bids_name}.$meta
+            ln -s $metaval ${bids_dir}/${bids_sub}_${bids_name}.$meta
         done
     fi
 }
@@ -100,9 +99,8 @@ else
 fi
 
 singularity run -e \
-    -B $(pwd)/:/root/ \
     docker://katealpert/bids-mrtrix3_connectome \
-    /root/input /root/ participant \
+    input . participant \
     -n 8 --parcellation $parcellation $sl_arg $pp_arg \
     --participant_label $sub
 res=$?
