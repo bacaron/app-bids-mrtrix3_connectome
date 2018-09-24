@@ -100,8 +100,9 @@ else
 fi
 
 singularity run -e \
+    -B $(pwd)/:/root/ \
     docker://katealpert/bids-mrtrix3_connectome \
-    input . participant \
+    /root/input /root/ participant \
     -n 8 --parcellation $parcellation $sl_arg $pp_arg \
     --participant_label $sub
 res=$?
